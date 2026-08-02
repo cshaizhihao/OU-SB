@@ -1,0 +1,22 @@
+name: Shell checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get update -y && sudo apt-get install -y shellcheck
+      - name: Syntax
+        run: bash -n OU-SB.sh tests/test.sh
+      - name: ShellCheck
+        run: shellcheck -x OU-SB.sh tests/test.sh
+      - name: Tests
+        run: bash tests/test.sh
