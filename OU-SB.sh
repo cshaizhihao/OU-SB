@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="0.1.0"
+APP_VERSION="0.1.1"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -974,15 +974,111 @@ create_manual_backup() {
     ok "配置已备份：$backup"
 }
 
+normalize_sing_box_arch() {
+    local machine=$1
+    case "$machine" in
+        x86_64|amd64) printf 'amd64\n' ;;
+        aarch64|arm64) printf 'arm64\n' ;;
+        armv7l|armv7) printf 'armv7\n' ;;
+        armv6l|armv6) printf 'armv6\n' ;;
+        armv5l|armv5) printf 'armv5\n' ;;
+        i386|i486|i586|i686|386) printf '386\n' ;;
+        loongarch64|loong64) printf 'loong64\n' ;;
+        mips64el|mips64le) printf 'mips64le\n' ;;
+        mipsel|mipsle) printf 'mipsle\n' ;;
+        ppc64le|riscv64|s390x) printf '%s\n' "$machine" ;;
+        *) return 1 ;;
+    esac
+}
+
+github_api_get() {
+    local url=$1
+    if [[ -n ${GITHUB_TOKEN:-} ]]; then
+        curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' "$url"
+    else
+        curl -fsSL -H 'Accept: application/vnd.github+json' "$url"
+    fi
+}
+
+check_free_space_kb() {
+    local path=$1 required_kb=$2 available_kb
+    available_kb=$(df -Pk "$path" | awk 'NR == 2 {print $4}')
+    [[ $available_kb =~ ^[0-9]+$ ]] || return 1
+    ((available_kb >= required_kb))
+}
+
+install_sing_box_alpine() {
+    local channel=$1 release_json tag version arch asset_name asset_json
+    local asset_url asset_digest asset_size digest actual required_kb
+    local temp_dir archive binary target
+
+    if [[ $channel == beta ]]; then
+        release_json=$(github_api_get 'https://api.github.com/repos/SagerNet/sing-box/releases?per_page=30' \
+            | jq -c '[.[] | select(.prerelease == true and .draft == false)] | first')
+    else
+        release_json=$(github_api_get 'https://api.github.com/repos/SagerNet/sing-box/releases/latest')
+    fi
+    [[ -n $release_json && $release_json != null ]] || die "无法获取 sing-box $channel 版本信息"
+
+    tag=$(jq -r '.tag_name // empty' <<< "$release_json")
+    version=${tag#v}
+    [[ -n $version ]] || die "sing-box 版本信息无效"
+    arch=$(normalize_sing_box_arch "$(uname -m)") || die "不支持的 CPU 架构：$(uname -m)"
+    asset_name="sing-box-${version}-linux-${arch}-musl.tar.gz"
+    asset_json=$(jq -c --arg name "$asset_name" '.assets[] | select(.name == $name)' <<< "$release_json")
+    [[ -n $asset_json ]] || die "未找到适用于 $arch 的官方 sing-box 压缩包"
+
+    asset_url=$(jq -r '.browser_download_url // empty' <<< "$asset_json")
+    asset_digest=$(jq -r '.digest // empty' <<< "$asset_json")
+    asset_size=$(jq -r '.size // 0' <<< "$asset_json")
+    [[ -n $asset_url && $asset_digest == sha256:* && $asset_size =~ ^[0-9]+$ ]] \
+        || die "sing-box 下载信息缺少 URL 或 SHA-256"
+
+    required_kb=$((asset_size * 4 / 1024 + 32768))
+    check_free_space_kb "$APP_DIR" "$required_kb" \
+        || die "磁盘空间不足，安装至少需要约 $((required_kb / 1024)) MiB 可用空间"
+
+    temp_dir=$(mktemp -d "$APP_DIR/install.XXXXXX")
+    archive="$temp_dir/$asset_name"
+    info "下载 sing-box $version ($arch)"
+    if ! curl -fL --retry 3 --connect-timeout 10 "$asset_url" -o "$archive"; then
+        rm -rf -- "$temp_dir"
+        die "sing-box 下载失败"
+    fi
+
+    digest=${asset_digest#sha256:}
+    actual=$(sha256sum "$archive" | awk '{print $1}')
+    if [[ $actual != "$digest" ]]; then
+        rm -rf -- "$temp_dir"
+        die "sing-box SHA-256 校验失败"
+    fi
+
+    if ! tar -xzf "$archive" -C "$temp_dir"; then
+        rm -rf -- "$temp_dir"
+        die "sing-box 压缩包解压失败"
+    fi
+    binary=$(find "$temp_dir" -type f -name sing-box | head -n1)
+    [[ -n $binary && -x $binary ]] || { rm -rf -- "$temp_dir"; die "压缩包中未找到 sing-box 可执行文件"; }
+
+    target="${OU_SB_SING_BOX_BIN:-/usr/local/bin/sing-box}"
+    mkdir -p "$(dirname "$target")"
+    install -m 755 "$binary" "$target"
+    rm -rf -- "$temp_dir"
+    hash -r
+}
+
 install_sing_box() {
     local channel=${1:-stable}
     info "安装 sing-box ($channel)"
-    if [[ $channel == beta ]]; then
+    if [[ $OS_FAMILY == alpine ]]; then
+        install_sing_box_alpine "$channel"
+    elif [[ $channel == beta ]]; then
         curl -fsSL https://sing-box.app/install.sh | sh -s -- --beta
     else
         curl -fsSL https://sing-box.app/install.sh | sh
     fi
     command -v sing-box >/dev/null 2>&1 || die "sing-box 安装失败"
+    ok "$(sing-box version 2>/dev/null | head -n1)"
 }
 
 setup_services() {

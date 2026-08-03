@@ -90,6 +90,10 @@ assert_false "detect port outside hop range" hop_spec_contains_port "20000,21000
 assert_true "valid DDNS endpoint" valid_endpoint_host "node.example.com"
 assert_true "valid IPv6 endpoint" valid_endpoint_host "2001:db8::1"
 assert_false "reject endpoint injection characters" valid_endpoint_host "host,evil"
+assert_eq "map x86_64 release architecture" "amd64" "$(normalize_sing_box_arch x86_64)"
+assert_eq "map Alpine aarch64 release architecture" "arm64" "$(normalize_sing_box_arch aarch64)"
+assert_eq "map 32-bit ARM release architecture" "armv7" "$(normalize_sing_box_arch armv7l)"
+assert_false "reject unsupported release architecture" normalize_sing_box_arch "sparc64"
 
 before=$(sha256sum "$CONFIG_PATH" | awk '{print $1}')
 bad_candidate=$(mktemp "$SB_DIR/.config.XXXXXX")
