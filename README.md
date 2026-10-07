@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logos/logo_ou-sb-v2.2.0.png" width="240" alt="OU-SB V2 Logo">
+  <img src="assets/logos/logo_ou-sb-v2.0.0.png" width="240" alt="OU-SB V2 Logo">
 </p>
 
 <h1 align="center">OU-SB · v2.2.0</h1>
@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/cshaizhihao/OU-SB/actions"><img src="https://github.com/cshaizhihao/OU-SB/actions/workflows/shellcheck.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/version-2.0.0-2f80ed?style=flat-square" alt="version">
+  <img src="https://img.shields.io/badge/version-2.2.0-2f80ed?style=flat-square" alt="version">
   <img src="https://img.shields.io/badge/sing--box-supported-111827?style=flat-square" alt="sing-box">
   <img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="MIT">
 </p>
@@ -91,7 +91,7 @@ bash tests/test.sh
 ```text
 OU-SB.sh                         主脚本
  tests/test.sh                   Bash 单元测试
- assets/logos/logo_ou-sb-v2.2.0.png  V2.2.0 Logo
+ assets/logos/logo_ou-sb-v2.0.0.png  V2.2.0 Logo
  .github/workflows/shellcheck.yml CI
 ```
 
