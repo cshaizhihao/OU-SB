@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="2.0.0"
+APP_VERSION="2.1.0"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -204,11 +204,25 @@ protocol_exists() {
 }
 
 backup_config() {
-    local stamp target
+    local stamp target state_target
     stamp="$(date '+%Y%m%d-%H%M%S')-$(rand_hex 3)"
     target="$BACKUP_DIR/config-$stamp.json"
     cp -p "$CONFIG_PATH" "$target"
+    if [[ -s "$STATE_PATH" ]]; then
+        state_target="$BACKUP_DIR/state-$stamp.json"
+        cp -p "$STATE_PATH" "$state_target"
+    fi
+    rotate_backups
     printf '%s\n' "$target"
+}
+
+rotate_backups() {
+    local keep=${OU_SB_BACKUP_KEEP:-20} file count=0
+    [[ $keep =~ ^[0-9]+$ ]] || keep=20
+    while IFS= read -r file; do
+        count=$((count + 1))
+        ((count > keep)) && rm -f -- "$file" "${file/config-/state-}"
+    done < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'config-*.json' -printf '%T@ %p\n' 2>/dev/null | sort -rn | cut -d' ' -f2-)
 }
 
 validate_candidate() {
@@ -1072,10 +1086,16 @@ install_sing_box() {
     info "安装 sing-box ($channel)"
     if [[ $OS_FAMILY == alpine ]]; then
         install_sing_box_alpine "$channel"
-    elif [[ $channel == beta ]]; then
-        curl -fsSL https://sing-box.app/install.sh | sh -s -- --beta
     else
-        curl -fsSL https://sing-box.app/install.sh | sh
+        local installer
+        installer=$(mktemp "$APP_DIR/sing-box-installer.XXXXXX")
+        if ! curl -fL --retry 3 --connect-timeout 10 https://sing-box.app/install.sh -o "$installer"; then
+            rm -f -- "$installer"
+            die "sing-box 安装脚本下载失败"
+        fi
+        bash -n "$installer" || { rm -f -- "$installer"; die "sing-box 安装脚本语法校验失败"; }
+        if [[ $channel == beta ]]; then bash "$installer" --beta; else bash "$installer"; fi
+        rm -f -- "$installer"
     fi
     command -v sing-box >/dev/null 2>&1 || die "sing-box 安装失败"
     ok "$(sing-box version 2>/dev/null | head -n1)"
