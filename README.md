@@ -1,25 +1,13 @@
-<p align="center">
-  <img src="assets/logos/logo_ou-sb-v2.0.0.png" width="240" alt="OU-SB V2 Logo">
-</p>
+<p align="center"><img src="assets/logos/logo_ou-sb-v2.0.0.png" width="240" alt="OU-SB Logo"></p>
+<h1 align="center">OU-SB · V2.0.0</h1>
+<p align="center"><strong>SSH 中的一键 sing-box 安装与多协议管理工具</strong></p>
+<p align="center">🚀 快速安装　🌈 国旗节点名　🧰 自动备份　📶 BBR + FQ 调优</p>
 
-<h1 align="center">OU-SB · v2.2.4</h1>
+## 📌 这是什么
 
-<p align="center"><strong>面向 SSH 的 sing-box 一键安装与多协议管理工具</strong></p>
+OU-SB 面向需要在 SSH 中快速部署 sing-box 的用户。脚本会检测系统、安装 sing-box、创建服务、生成协议入站、输出客户端链接，并保留非 OU-SB 管理的配置。
 
-<p align="center">🚀 安装更稳　🔐 更新可校验　🧰 配置可恢复　🌐 协议可扩展</p>
-
-<p align="center">
-  <a href="https://github.com/cshaizhihao/OU-SB/actions"><img src="https://github.com/cshaizhihao/OU-SB/actions/workflows/shellcheck.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/version-2.2.0-2f80ed?style=flat-square" alt="version">
-  <img src="https://img.shields.io/badge/sing--box-supported-111827?style=flat-square" alt="sing-box">
-  <img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="MIT">
-</p>
-
-## ✨ 项目定位
-
-OU-SB 是一个在 SSH 终端中运行的 sing-box 服务端管理工具。它负责安装运行环境、生成协议入站、管理证书和端口、输出客户端连接信息，并在配置变更前自动校验和备份。
-
-V2.2.4 重点强化了“首次安装、日常维护、故障恢复”三条路径：适合新服务器快速部署，也适合已有 sing-box 配置的谨慎接管。
+V2.0.0 的交互重点是：首次运行按推荐值一路回车即可完成部署；协议名称默认使用“国旗 + 空格 + 协议名”，也可以在添加时自定义。
 
 ## ⚡ 一键安装
 
@@ -27,82 +15,89 @@ V2.2.4 重点强化了“首次安装、日常维护、故障恢复”三条路�
 bash <(curl -fsSL https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh)
 ```
 
-首次运行会：
+首次运行流程：
 
-1. 检测发行版、架构、服务管理器和基础依赖；
-2. 安装或检查 sing-box；
-3. 创建受限权限的数据、证书和备份目录；
-4. 保留非 `ou-sb-*` 入站，不会静默覆盖已有配置；
-5. 写入 systemd 或 OpenRC 服务；
-6. 配置协议并在应用前执行配置校验。
+1. 输入大写 `YES` 确认脚本将管理 sing-box、服务和防火墙；
+2. 自动检测公网 IP，也可以输入自己的 IP 或 DDNS；
+3. 检测 BBR + FQ，回车进入 TCP 调优；
+4. TCP 缓冲区选择推荐值、预设 MB 或自定义 MB；
+5. 添加协议，直接回车默认选择 VLESS TCP + Vision + Reality；
+6. 设置协议名称并启动服务。
 
-> 建议使用全新 Debian、Ubuntu、Rocky Linux、AlmaLinux、CentOS Stream 或 Alpine 服务器，并以 root 运行。生产环境请先确认安全组和防火墙策略。
+> 支持 Debian、Ubuntu、Rocky Linux、AlmaLinux、CentOS Stream 和 Alpine。建议使用 root 在全新服务器上运行，并提前放行安全组端口。
 
-## 🏳️ 节点名称与首次安装
+## 🔌 支持协议
 
-首次安装只询问连接 IP 或 DDNS，并会自动检测一次 BBR + FQ 与 TCP 调优，不再强制设置节点名称。脚本会根据公网 IP 的国家代码生成国旗前缀，导出的链接会显示为 `🇺🇸 VLESS`、`🇸🇬 SS2022` 这样的名称；无法识别地区时使用 `🌐`。之后可在“节点信息”中设置自定义名称。
-
-进入首次安装流程前需要准确输入大写 `YES`，以确认脚本将管理 sing-box 配置、服务和防火墙。添加协议时可先确认选择，输入 `n` 或选择 `0` 可返回上一级。
-
-## 🧩 已支持协议
-
-- Shadowsocks 2022
-- Hysteria2（可选 UDP 端口跳跃）
-- TUIC
 - VLESS TCP + XTLS Vision + Reality
+- Shadowsocks 2022
+- Hysteria2（UDP 端口跳跃）
+- TUIC
 - AnyTLS Reality
-- Trojan TLS（使用本地或导入证书）
-- Snell v4/v5/v6（实验功能）
+- Trojan TLS
+- Snell v4/v5/v6（实验）
 
-协议配置使用独立 `ou-sb-*` tag。删除或卸载 OU-SB 时，其他应用管理的入站会被保留。
+所有 OU-SB 入站使用 `ou-sb-*` tag。删除 OU-SB 协议时，其他入站会被保留。
 
-## 🛠️ 日常命令
+## 🧭 使用方式
 
-主菜单已聚焦于节点、协议、服务、网络调优和更新；低频的校验、备份和日志功能仍可通过 CLI 使用。
+安装完成后直接输入：
 
 ```bash
-sb                  # 交互式管理面板
-sb --status         # 查看系统、sing-box 和协议状态
-sb --validate       # 校验配置与状态
-sb --backup         # 创建配置备份
-sb --export         # 输出客户端连接信息
-sb --doctor         # 检查依赖和配置
-sb --version        # 查看当前版本
-sb --apply-firewall # 恢复 HY2 端口跳跃规则
-sb --clear-firewall # 清理 HY2 端口跳跃规则
-sb --version        # 查看版本
+sb
 ```
 
-## 🔐 安全与恢复
+主菜单提供节点配置、协议添加/删除、端口修改、HY2 端口跳跃、服务启停、BBR + FQ 与 TCP 调优、更新和卸载。
 
-V2.2.4 会同时备份配置和状态文件，并默认保留最近 20 组备份（可通过 `OU_SB_BACKUP_KEEP` 调整）。
+常用命令：
 
-- 配置变更先生成候选文件，并通过 JSON 校验；
-- 配置文件、状态文件和私钥使用受限权限；
-- 每次提交配置前创建备份；
-- sing-box 下载包在 Alpine 路径执行 SHA-256 校验；
-- HY2 跳跃规则使用独立规则表；
-- 订阅链接只输出客户端所需的公开凭据，不输出 Reality 私钥。
+```bash
+sb --status
+sb --validate
+sb --backup
+sb --export
+sb --doctor
+```
 
-请将服务器安全组放行实际监听端口；启用 HY2 端口跳跃时，还要放行配置的 UDP 端口范围。
+## 🌈 节点名称
 
-## 🧪 开发与测试
+脚本会尝试通过多个公网 IP 服务检测服务器地址，再根据国家代码生成国旗。默认名称示例：
+
+```text
+🇺🇸 VLESS
+🇸🇬 SS2022
+🇯🇵 Trojan
+🌐 TUIC
+```
+
+如果公网 IP 服务不可用，会回退到本机地址或 `🌐`；也可以在“节点信息”中手动填写 IP、DDNS 或自定义名称。
+
+## 📶 BBR + FQ 与 TCP 调优
+
+首次安装会自动检测当前拥塞控制和队列调度。网络优化菜单支持：
+
+- 开启 BBR + FQ；
+- 切换回 cubic；
+- 根据内存使用推荐 MB；
+- 选择 4/8/16/32 MB 预设；
+- 手动输入 1-1024 MB。
+
+配置保存到 `/etc/sysctl.d/99-ou-sb-network.conf`。
+
+## 🔐 安全和恢复
+
+- 配置变更前自动备份配置和状态；
+- 失败校验不会覆盖旧配置；
+- 私钥、配置和状态文件使用受限权限；
+- Alpine 下载 sing-box 时校验 SHA-256；
+- 卸载时可选择是否删除 sing-box 程序和残留。
+
+## 🧪 开发测试
 
 ```bash
 bash -n OU-SB.sh tests/test.sh
-shellcheck -x OU-SB.sh tests/test.sh
 bash tests/test.sh
 ```
 
-## 📄 目录
-
-```text
-OU-SB.sh                         主脚本
- tests/test.sh                   Bash 单元测试
- assets/logos/logo_ou-sb-v2.0.0.png  V2.2.4 Logo
- .github/workflows/shellcheck.yml CI
-```
-
-## 📜 License
+## 📄 License
 
 [MIT](LICENSE)

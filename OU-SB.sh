@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="2.2.4"
+APP_VERSION="2.0.0"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -491,7 +491,18 @@ get_public_host() {
         printf '%s\n' "$host"
         return 0
     fi
-    host=$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)
+    for endpoint in \
+        "https://api.ipify.org" \
+        "https://ifconfig.me/ip" \
+        "https://icanhazip.com" \
+        "https://checkip.amazonaws.com"; do
+        host=$(curl -4 -fsSL --max-time 4 "$endpoint" 2>/dev/null | tr -d '[:space:]' || true)
+        [[ $host =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && break
+        host=""
+    done
+    if [[ -z $host ]]; then
+        host=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
     [[ -n $host ]] || host="YOUR_SERVER_IP"
     printf '%s\n' "$host"
 }
@@ -509,7 +520,8 @@ get_public_flag() {
     local host code
     host=$(get_public_host)
     [[ $host != YOUR_SERVER_IP ]] || { printf '🌐'; return 0; }
-    code=$(curl -4 -fsS --max-time 5 "https://ipapi.co/$host/country_code/" 2>/dev/null || true)
+    code=$(curl -4 -fsSL --max-time 4 "https://ipapi.co/$host/country_code/" 2>/dev/null | tr -d '[:space:]' || true)
+    [[ -n $code ]] || code=$(curl -4 -fsSL --max-time 4 "https://ipinfo.io/$host/country" 2>/dev/null | tr -d '[:space:]' || true)
     country_flag "$code"
 }
 
@@ -749,23 +761,22 @@ EOF
 add_protocol_menu() {
     while true; do
         banner
-        cat <<'EOF'
-  添加协议
-  ─────────────────────────
-  1) VLESS TCP + XTLS Vision + Reality（推荐）
-  2) Shadowsocks 2022
-  3) Hysteria2
-  4) TUIC
-  5) AnyTLS Reality
-  6) Trojan TLS
-  7) Snell v4/v5/v6（实验）
-  0) 返回
-EOF
-        read -r -p "选择: " choice
+        printf '%s%s添加协议%s\n' "$C_CYAN" "$C_BOLD" "$C_RESET"
+        printf '%s─────────────────────────%s\n' "$C_MUTED" "$C_RESET"
+        printf '  %s1)%s VLESS TCP + XTLS Vision + Reality %s（推荐）%s\n' "$C_GREEN" "$C_RESET" "$C_GREEN" "$C_RESET"
+        printf '  %s2)%s Shadowsocks 2022\n' "$C_GREEN" "$C_RESET"
+        printf '  %s3)%s Hysteria2\n' "$C_GREEN" "$C_RESET"
+        printf '  %s4)%s TUIC\n' "$C_GREEN" "$C_RESET"
+        printf '  %s5)%s AnyTLS Reality\n' "$C_GREEN" "$C_RESET"
+        printf '  %s6)%s Trojan TLS\n' "$C_GREEN" "$C_RESET"
+        printf '  %s7)%s Snell v4/v5/v6 %s（实验）%s\n' "$C_GREEN" "$C_RESET" "$C_YELLOW" "$C_RESET"
+        printf '  %s0)%s 返回\n' "$C_RED" "$C_RESET"
+        read -r -p "选择 [默认 1]: " choice
+        choice=${choice:-1}
         case "$choice" in
             0) return 0 ;;
             1|2|3|4|5|6|7)
-                read -r -p "确认添加该协议？[Y/n，输入 n 返回]: " confirm
+                read -r -p "确认添加该协议？（直接回车确认，输入 n 返回）: " confirm
                 [[ $confirm =~ ^[Nn]$ ]] && continue
                 case "$choice" in
                     1) add_vless ;; 2) add_ss ;; 3) add_hy2 ;; 4) add_tuic ;;
@@ -1420,6 +1431,7 @@ main_menu() {
     while true; do
         banner
         show_protocol_status
+        printf '%s快捷按键：sb%s（随时输入 sb 可重新打开管理面板）\n' "$C_CYAN" "$C_RESET"
         printf '\n%s%s操作菜单%s\n' "$C_CYAN" "$C_BOLD" "$C_RESET"
         printf '  %s1)%s 查看节点配置\n' "$C_GREEN" "$C_RESET"
         printf '  %s2)%s 添加协议\n' "$C_GREEN" "$C_RESET"
@@ -1480,7 +1492,7 @@ first_run() {
         read -r -p "继续: " _
         tcp_tuning
     fi
-    read -r -p "现在添加第一个协议？[Y/n]: " answer
+    read -r -p "现在添加第一个协议？（直接回车添加，输入 n 跳过）: " answer
     [[ ! $answer =~ ^[Nn]$ ]] && add_protocol_menu
     apply_hy2_firewall || true
     service_restart || service_start || warn "服务启动失败，请使用 sb 查看状态"
