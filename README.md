@@ -2,7 +2,7 @@
   <img src="assets/logos/logo_ou-sb-v2.0.0.png" width="240" alt="OU-SB V2 Logo">
 </p>
 
-<h1 align="center">OU-SB · v2.2.2</h1>
+<h1 align="center">OU-SB · v2.2.3</h1>
 
 <p align="center"><strong>面向 SSH 的 sing-box 一键安装与多协议管理工具</strong></p>
 
@@ -19,7 +19,7 @@
 
 OU-SB 是一个在 SSH 终端中运行的 sing-box 服务端管理工具。它负责安装运行环境、生成协议入站、管理证书和端口、输出客户端连接信息，并在配置变更前自动校验和备份。
 
-V2.2.2 重点强化了“首次安装、日常维护、故障恢复”三条路径：适合新服务器快速部署，也适合已有 sing-box 配置的谨慎接管。
+V2.2.3 重点强化了“首次安装、日常维护、故障恢复”三条路径：适合新服务器快速部署，也适合已有 sing-box 配置的谨慎接管。
 
 ## ⚡ 一键安装
 
@@ -40,7 +40,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB
 
 ## 🏳️ 节点名称与首次安装
 
-首次安装只询问连接 IP 或 DDNS，不再强制设置节点名称。脚本会根据公网 IP 的国家代码生成国旗前缀，导出的链接会显示为 `🇺🇸 VLESS`、`🇸🇬 SS2022` 这样的名称；无法识别地区时使用 `🌐`。之后可在“节点信息”中设置自定义名称。
+首次安装只询问连接 IP 或 DDNS，并会自动检测一次 BBR + FQ 与 TCP 调优，不再强制设置节点名称。脚本会根据公网 IP 的国家代码生成国旗前缀，导出的链接会显示为 `🇺🇸 VLESS`、`🇸🇬 SS2022` 这样的名称；无法识别地区时使用 `🌐`。之后可在“节点信息”中设置自定义名称。
 
 进入首次安装流程前需要准确输入大写 `YES`，以确认脚本将管理 sing-box 配置、服务和防火墙。添加协议时可先确认选择，输入 `n` 或选择 `0` 可返回上一级。
 
@@ -75,7 +75,7 @@ sb --version        # 查看版本
 
 ## 🔐 安全与恢复
 
-V2.2.2 会同时备份配置和状态文件，并默认保留最近 20 组备份（可通过 `OU_SB_BACKUP_KEEP` 调整）。
+V2.2.3 会同时备份配置和状态文件，并默认保留最近 20 组备份（可通过 `OU_SB_BACKUP_KEEP` 调整）。
 
 - 配置变更先生成候选文件，并通过 JSON 校验；
 - 配置文件、状态文件和私钥使用受限权限；
@@ -99,7 +99,7 @@ bash tests/test.sh
 ```text
 OU-SB.sh                         主脚本
  tests/test.sh                   Bash 单元测试
- assets/logos/logo_ou-sb-v2.0.0.png  V2.2.2 Logo
+ assets/logos/logo_ou-sb-v2.0.0.png  V2.2.3 Logo
  .github/workflows/shellcheck.yml CI
 ```
 

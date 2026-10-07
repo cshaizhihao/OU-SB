@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="2.2.2"
+APP_VERSION="2.2.3"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -1344,12 +1344,13 @@ pause_screen() {
 memory_recommendation() {
     local mb
     mb=$(awk '/MemTotal:/ {print int($2/1024); exit}' /proc/meminfo 2>/dev/null || echo 1024)
-    if ((mb < 512)); then printf '4194304 4194304'; elif ((mb < 1024)); then printf '8388608 8388608'; elif ((mb < 2048)); then printf '16777216 16777216'; else printf '33554432 33554432'; fi
+    if ((mb < 512)); then printf '4'; elif ((mb < 1024)); then printf '8'; elif ((mb < 2048)); then printf '16'; else printf '32'; fi
 }
 
 bbr_status() {
-    printf '拥塞控制：%s\\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
-    printf '队列调度：%s\\n' "$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)"
+    printf '%s当前网络状态%s\n' "$C_CYAN" "$C_RESET"
+    printf '  拥塞控制：%s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+    printf '  队列调度：%s\n' "$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)"
 }
 
 enable_bbr_fq() {
@@ -1361,26 +1362,37 @@ enable_bbr_fq() {
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 EOF
-    ok "BBR + FQ 已开启"
+    ok "✅ BBR + FQ 已开启"
 }
 
 tcp_tuning() {
-    local rec_r rec_w input_r input_w
-    read -r rec_r rec_w <<< "$(memory_recommendation)"
-    printf '推荐缓冲区：rmem/wmem %s bytes（按内存自动计算）\\n' "$rec_r"
-    read -r -p "接收缓冲区 [$rec_r]（可输入自定义字节数）: " input_r
-    read -r -p "发送缓冲区 [$rec_w]（可输入自定义字节数）: " input_w
-    input_r=${input_r:-$rec_r}; input_w=${input_w:-$rec_w}
-    [[ $input_r =~ ^[0-9]+$ && $input_w =~ ^[0-9]+$ ]] || { warn "缓冲区必须是数字"; return 1; }
-    sysctl -w net.core.rmem_max="$input_r" net.core.wmem_max="$input_w" net.ipv4.tcp_rmem="4096 87380 $input_r" net.ipv4.tcp_wmem="4096 65536 $input_w" >/dev/null
+    local rec_mb choice mb max
+    rec_mb=$(memory_recommendation)
+    printf '%s推荐值%s：根据检测到的物理内存自动选择 %s MB\n' "$C_CYAN" "$C_RESET" "$rec_mb"
+    cat <<EOF
+1) 使用推荐值（${rec_mb} MB）
+2) 小内存模式（4 MB）
+3) 自定义缓冲区
+0) 返回
+EOF
+    read -r -p "选择: " choice
+    case "$choice" in
+        1) mb=$rec_mb ;; 2) mb=4 ;;
+        3) read -r -p "请输入缓冲区大小（MB）: " mb ;;
+        0) return 0 ;; *) warn "无效选项"; return 1 ;;
+    esac
+    [[ $mb =~ ^[0-9]+$ && $mb -ge 1 && $mb -le 1024 ]] || { warn "请输入 1-1024 之间的 MB 数值"; return 1; }
+    max=$((mb * 1024 * 1024))
+    sysctl -w net.core.rmem_max="$max" net.core.wmem_max="$max" \
+        net.ipv4.tcp_rmem="4096 87380 $max" net.ipv4.tcp_wmem="4096 65536 $max" >/dev/null
     mkdir -p /etc/sysctl.d
     cat >> /etc/sysctl.d/99-ou-sb-network.conf <<EOF
-net.core.rmem_max=$input_r
-net.core.wmem_max=$input_w
-net.ipv4.tcp_rmem=4096 87380 $input_r
-net.ipv4.tcp_wmem=4096 65536 $input_w
+net.core.rmem_max=$max
+net.core.wmem_max=$max
+net.ipv4.tcp_rmem=4096 87380 $max
+net.ipv4.tcp_wmem=4096 65536 $max
 EOF
-    ok "TCP 缓冲区调优已应用"
+    ok "✅ TCP 缓冲区已设置为 ${mb} MB"
 }
 
 network_tuning_menu() {
@@ -1452,6 +1464,9 @@ first_run() {
     read -r answer
     [[ $answer == YES ]] || die "未确认协议，已退出"
     configure_identity_ip
+    printf '%s网络优化%s\n' "$C_MAGENTA" "$C_RESET"
+    read -r -p "首次安装现在检测并配置 BBR + FQ / TCP 调优？[Y/n]: " answer
+    [[ ! $answer =~ ^[Nn]$ ]] && network_tuning_menu
     read -r -p "现在添加第一个协议？[Y/n]: " answer
     [[ ! $answer =~ ^[Nn]$ ]] && add_protocol_menu
     apply_hy2_firewall || true
