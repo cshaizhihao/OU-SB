@@ -48,15 +48,7 @@ sb
 
 主菜单提供节点配置、协议添加/删除、端口修改、HY2 端口跳跃、服务启停、BBR + FQ 与 TCP 调优、更新和卸载。
 
-常用命令：
 
-```bash
-sb --status
-sb --validate
-sb --backup
-sb --export
-sb --doctor
-```
 
 ## 🌈 节点名称
 
