@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="2.2.3"
+APP_VERSION="2.2.4"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -752,10 +752,10 @@ add_protocol_menu() {
         cat <<'EOF'
   添加协议
   ─────────────────────────
-  1) Shadowsocks 2022
-  2) Hysteria2
-  3) TUIC
-  4) VLESS TCP + XTLS Vision + Reality
+  1) VLESS TCP + XTLS Vision + Reality（推荐）
+  2) Shadowsocks 2022
+  3) Hysteria2
+  4) TUIC
   5) AnyTLS Reality
   6) Trojan TLS
   7) Snell v4/v5/v6（实验）
@@ -768,7 +768,7 @@ EOF
                 read -r -p "确认添加该协议？[Y/n，输入 n 返回]: " confirm
                 [[ $confirm =~ ^[Nn]$ ]] && continue
                 case "$choice" in
-                    1) add_ss ;; 2) add_hy2 ;; 3) add_tuic ;; 4) add_vless ;;
+                    1) add_vless ;; 2) add_ss ;; 3) add_hy2 ;; 4) add_tuic ;;
                     5) add_anytls ;; 6) add_trojan ;; 7) add_snell ;;
                 esac
                 break ;;
@@ -1349,8 +1349,8 @@ memory_recommendation() {
 
 bbr_status() {
     printf '%s当前网络状态%s\n' "$C_CYAN" "$C_RESET"
-    printf '  拥塞控制：%s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
-    printf '  队列调度：%s\n' "$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)"
+    printf '  拥塞控制：%s%s%s\n' "$C_GREEN" "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)" "$C_RESET"
+    printf '  队列调度：%s%s%s\n' "$C_GREEN" "$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)" "$C_RESET"
 }
 
 enable_bbr_fq() {
@@ -1370,15 +1370,19 @@ tcp_tuning() {
     rec_mb=$(memory_recommendation)
     printf '%s推荐值%s：根据检测到的物理内存自动选择 %s MB\n' "$C_CYAN" "$C_RESET" "$rec_mb"
     cat <<EOF
-1) 使用推荐值（${rec_mb} MB）
-2) 小内存模式（4 MB）
-3) 自定义缓冲区
+1) 推荐值（${rec_mb} MB）
+2) 4 MB（低内存）
+3) 8 MB（均衡）
+4) 16 MB（高吞吐）
+5) 32 MB（大内存）
+6) 自定义 MB
 0) 返回
 EOF
-    read -r -p "选择: " choice
+    read -r -p "选择 [默认 1]: " choice
+    choice=${choice:-1}
     case "$choice" in
-        1) mb=$rec_mb ;; 2) mb=4 ;;
-        3) read -r -p "请输入缓冲区大小（MB）: " mb ;;
+        1) mb=$rec_mb ;; 2) mb=4 ;; 3) mb=8 ;; 4) mb=16 ;; 5) mb=32 ;;
+        6) read -r -p "请输入缓冲区大小（MB）: " mb ;;
         0) return 0 ;; *) warn "无效选项"; return 1 ;;
     esac
     [[ $mb =~ ^[0-9]+$ && $mb -ge 1 && $mb -le 1024 ]] || { warn "请输入 1-1024 之间的 MB 数值"; return 1; }
@@ -1416,23 +1420,21 @@ main_menu() {
     while true; do
         banner
         show_protocol_status
-        cat <<'EOF'
-
-  1) 查看节点配置
-  2) 添加协议
-  3) 删除协议
-  4) 修改协议端口
-  5) HY2 端口跳跃
-  6) 节点信息
-  7) 启动服务
-  8) 停止服务
-  9) 重启服务
-  10) BBR+FQ 与 TCP 调优
-  11) 更新 sing-box
-  12) 更新 OU-SB
-  13) 卸载 OU-SB
-  0) 退出
-EOF
+        printf '\n%s%s操作菜单%s\n' "$C_CYAN" "$C_BOLD" "$C_RESET"
+        printf '  %s1)%s 查看节点配置\n' "$C_GREEN" "$C_RESET"
+        printf '  %s2)%s 添加协议\n' "$C_GREEN" "$C_RESET"
+        printf '  %s3)%s 删除协议\n' "$C_GREEN" "$C_RESET"
+        printf '  %s4)%s 修改协议端口\n' "$C_GREEN" "$C_RESET"
+        printf '  %s5)%s HY2 端口跳跃\n' "$C_GREEN" "$C_RESET"
+        printf '  %s6)%s 节点信息\n' "$C_GREEN" "$C_RESET"
+        printf '  %s7)%s 启动服务\n' "$C_GREEN" "$C_RESET"
+        printf '  %s8)%s 停止服务\n' "$C_GREEN" "$C_RESET"
+        printf '  %s9)%s 重启服务\n' "$C_GREEN" "$C_RESET"
+        printf '  %s10)%s BBR+FQ 与 TCP 调优\n' "$C_GREEN" "$C_RESET"
+        printf '  %s11)%s 更新 sing-box\n' "$C_GREEN" "$C_RESET"
+        printf '  %s12)%s 更新 OU-SB\n' "$C_GREEN" "$C_RESET"
+        printf '  %s13)%s 卸载 OU-SB\n' "$C_GREEN" "$C_RESET"
+        printf '  %s0)%s 退出\n' "$C_RED" "$C_RESET"
         printf '\n'
         read -r -p "请选择: " choice
         case "$choice" in
@@ -1450,7 +1452,7 @@ EOF
 }
 
 first_run() {
-    local answer
+    local answer current_cc current_qdisc
     if command -v sing-box >/dev/null 2>&1; then
         info "检测到 $(sing-box version 2>/dev/null | head -n1)"
     else
@@ -1466,7 +1468,18 @@ first_run() {
     configure_identity_ip
     printf '%s网络优化%s\n' "$C_MAGENTA" "$C_RESET"
     read -r -p "首次安装现在检测并配置 BBR + FQ / TCP 调优？[Y/n]: " answer
-    [[ ! $answer =~ ^[Nn]$ ]] && network_tuning_menu
+    if [[ ! $answer =~ ^[Nn]$ ]]; then
+        bbr_status
+        current_cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)
+        current_qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null || true)
+        if [[ $current_cc != bbr || $current_qdisc != fq ]]; then
+            read -r -p "回车开启 BBR + FQ，输入 n 跳过: " answer
+            [[ ! $answer =~ ^[Nn]$ ]] && enable_bbr_fq
+        fi
+        printf '%s按 Enter 进入 TCP 调优%s\n' "$C_CYAN" "$C_RESET"
+        read -r -p "继续: " _
+        tcp_tuning
+    fi
     read -r -p "现在添加第一个协议？[Y/n]: " answer
     [[ ! $answer =~ ^[Nn]$ ]] && add_protocol_menu
     apply_hy2_firewall || true
