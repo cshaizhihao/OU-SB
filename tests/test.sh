@@ -131,5 +131,11 @@ assert_true "VLESS link is explicitly TCP Vision Reality" grep -q 'flow=xtls-rpr
 assert_true "VLESS keeps its own Reality public key" grep -q 'pbk=vless-public-key' <<< "$links"
 assert_true "AnyTLS keeps a separate Reality public key" grep -q 'pbk=anytls-public-key' <<< "$links"
 
+trojan=$(jq -nc --arg tag "$TAG_TROJAN" '{type:"trojan", tag:$tag, listen:"::", listen_port:3443, users:[{name:"ou-sb", password:"trojan-password"}], tls:{enabled:true, certificate_path:"/tmp/fullchain.pem", key_path:"/tmp/privkey.pem"}}')
+assert_true "add Trojan TLS inbound" apply_inbound_json "$TAG_TROJAN" "$trojan"
+trojan_links=$(show_links)
+assert_true "Trojan link is exported" grep -q '^trojan://' <<< "$trojan_links"
+assert_true "Trojan tag is managed" protocol_exists "$TAG_TROJAN"
+
 printf '\n%d passed, %d failed\n' "$passes" "$failures"
 ((failures == 0))

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="2.1.0"
+APP_VERSION="2.2.0"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -27,6 +27,7 @@ TAG_TUIC="ou-sb-tuic"
 TAG_VLESS="ou-sb-vless-reality"
 TAG_ANYTLS="ou-sb-anytls-reality"
 TAG_SNELL="ou-sb-snell"
+TAG_TROJAN="ou-sb-trojan"
 
 OS_FAMILY="unknown"
 INIT_SYSTEM="unknown"
@@ -563,6 +564,21 @@ add_tuic() {
     apply_inbound_json "$TAG_TUIC" "$inbound"
 }
 
+add_trojan() {
+    protocol_exists "$TAG_TROJAN" && { warn "Trojan 已安装"; return 0; }
+    local port password inbound
+    port=$(prompt_port "Trojan 端口")
+    password=$(rand_base64 24)
+    ensure_certificates
+    inbound=$(jq -nc --arg tag "$TAG_TROJAN" --argjson port "$port" --arg password "$password" \
+        --arg cert "$CERT_DIR/fullchain.pem" --arg key "$CERT_DIR/privkey.pem" '{
+        type:"trojan", tag:$tag, listen:"::", listen_port:$port,
+        users:[{name:"ou-sb", password:$password}],
+        tls:{enabled:true, certificate_path:$cert, key_path:$key}
+    }')
+    apply_inbound_json "$TAG_TROJAN" "$inbound"
+}
+
 add_vless() {
     protocol_exists "$TAG_VLESS" && { warn "VLESS Reality 已安装"; return 0; }
     local port uuid sni material private public sid inbound
@@ -689,7 +705,8 @@ add_protocol_menu() {
   3) TUIC
   4) VLESS TCP + XTLS Vision + Reality
   5) AnyTLS Reality
-  6) Snell v4/v5/v6（实验）
+  6) Trojan TLS
+  7) Snell v4/v5/v6（实验）
   0) 返回
 EOF
         read -r -p "选择: " choice
@@ -699,7 +716,8 @@ EOF
             3) add_tuic; break ;;
             4) add_vless; break ;;
             5) add_anytls; break ;;
-            6) add_snell; break ;;
+            6) add_trojan; break ;;
+            7) add_snell; break ;;
             0) return 0 ;;
             *) warn "无效选项"; sleep 1 ;;
         esac
@@ -724,7 +742,8 @@ EOF
         3) tag=$TAG_TUIC; name=TUIC ;;
         4) tag=$TAG_VLESS; name=VLESS ;;
         5) tag=$TAG_ANYTLS; name=AnyTLS ;;
-        6) tag=$TAG_SNELL; name=Snell ;;
+        6) tag=$TAG_TROJAN; name=Trojan ;;
+        7) tag=$TAG_SNELL; name=Snell ;;
         0) return 0 ;;
         *) warn "无效选项"; return 1 ;;
     esac
@@ -753,7 +772,8 @@ EOF
         3) tag=$TAG_TUIC; name=TUIC ;;
         4) tag=$TAG_VLESS; name=VLESS ;;
         5) tag=$TAG_ANYTLS; name=AnyTLS ;;
-        6) tag=$TAG_SNELL; name=Snell ;;
+        6) tag=$TAG_TROJAN; name=Trojan ;;
+        7) tag=$TAG_SNELL; name=Snell ;;
         0) return 0 ;;
         *) warn "无效选项"; return 1 ;;
     esac
@@ -920,6 +940,11 @@ show_links() {
             printf 'AnyTLS Reality\nanytls://%s@%s:%s/?security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s#%s-AnyTLS\n\n' "$(url_encode "$password")" "$uri_host" "$port" "$sni" "$public" "$sid" "$label"
         fi
     done
+    if protocol_exists "$TAG_TROJAN"; then
+        port=$(jq -r --arg tag "$TAG_TROJAN" '.inbounds[]|select(.tag==$tag)|.listen_port' "$CONFIG_PATH")
+        password=$(jq -r --arg tag "$TAG_TROJAN" '.inbounds[]|select(.tag==$tag)|.users[0].password' "$CONFIG_PATH")
+        printf 'Trojan TLS\ntrojan://%s@%s:%s?security=tls&sni=%s#%s-Trojan\n\n' "$(url_encode "$password")" "$uri_host" "$port" "$host" "$label"
+    fi
     if protocol_exists "$TAG_SNELL"; then
         port=$(jq -r --arg tag "$TAG_SNELL" '.inbounds[]|select(.tag==$tag)|.listen_port' "$CONFIG_PATH")
         password=$(jq -r --arg tag "$TAG_SNELL" '.inbounds[]|select(.tag==$tag)|.psk' "$CONFIG_PATH")
@@ -944,6 +969,7 @@ $TAG_HY2|Hysteria2
 $TAG_TUIC|TUIC
 $TAG_VLESS|VLESS TCP+Vision+Reality
 $TAG_ANYTLS|AnyTLS Reality
+$TAG_TROJAN|Trojan TLS
 $TAG_SNELL|Snell v4/v5/v6
 EOF
 }

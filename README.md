@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logos/logo_ou-sb-v2.1.0.png" width="240" alt="OU-SB V2 Logo">
+  <img src="assets/logos/logo_ou-sb-v2.2.0.png" width="240" alt="OU-SB V2 Logo">
 </p>
 
-<h1 align="center">OU-SB · v2.1.0</h1>
+<h1 align="center">OU-SB · v2.2.0</h1>
 
 <p align="center"><strong>面向 SSH 的 sing-box 一键安装与多协议管理工具</strong></p>
 
@@ -19,7 +19,7 @@
 
 OU-SB 是一个在 SSH 终端中运行的 sing-box 服务端管理工具。它负责安装运行环境、生成协议入站、管理证书和端口、输出客户端连接信息，并在配置变更前自动校验和备份。
 
-V2.1.0 重点强化了“首次安装、日常维护、故障恢复”三条路径：适合新服务器快速部署，也适合已有 sing-box 配置的谨慎接管。
+V2.2.0 重点强化了“首次安装、日常维护、故障恢复”三条路径：适合新服务器快速部署，也适合已有 sing-box 配置的谨慎接管。
 
 ## ⚡ 一键安装
 
@@ -45,6 +45,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB
 - TUIC
 - VLESS TCP + XTLS Vision + Reality
 - AnyTLS Reality
+- Trojan TLS（使用本地或导入证书）
 - Snell v4/v5/v6（实验功能）
 
 协议配置使用独立 `ou-sb-*` tag。删除或卸载 OU-SB 时，其他应用管理的入站会被保留。
@@ -66,7 +67,7 @@ sb --version        # 查看版本
 
 ## 🔐 安全与恢复
 
-V2.1.0 会同时备份配置和状态文件，并默认保留最近 20 组备份（可通过 `OU_SB_BACKUP_KEEP` 调整）。
+V2.2.0 会同时备份配置和状态文件，并默认保留最近 20 组备份（可通过 `OU_SB_BACKUP_KEEP` 调整）。
 
 - 配置变更先生成候选文件，并通过 JSON 校验；
 - 配置文件、状态文件和私钥使用受限权限；
@@ -90,7 +91,7 @@ bash tests/test.sh
 ```text
 OU-SB.sh                         主脚本
  tests/test.sh                   Bash 单元测试
- assets/logos/logo_ou-sb-v2.1.0.png  V2.1.0 Logo
+ assets/logos/logo_ou-sb-v2.2.0.png  V2.2.0 Logo
  .github/workflows/shellcheck.yml CI
 ```
 
