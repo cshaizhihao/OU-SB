@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="0.1.1"
+APP_VERSION="2.0.0"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -1223,7 +1223,7 @@ main_menu() {
         cat <<'EOF'
 
   1) 查看节点配置      10) 服务状态
-  2) 添加协议          10) 服务状态
+  2) 添加协议          11) 查看日志
   3) 删除协议          11) 查看日志
   4) 修改协议端口      12) 校验配置
   5) HY2 端口跳跃      13) 手动备份
@@ -1287,6 +1287,48 @@ first_run() {
     service_restart || service_start || warn "服务启动失败，请使用 sb 查看状态"
 }
 
+cli_status() {
+    printf '%s %s\n' "$APP_NAME" "$APP_VERSION"
+    printf 'OS: %s | init: %s\n' "$OS_FAMILY" "$INIT_SYSTEM"
+    if command -v sing-box >/dev/null 2>&1; then
+        printf 'sing-box: %s\n' "$(sing-box version 2>/dev/null | head -n1)"
+    else
+        printf 'sing-box: 未安装\n'
+    fi
+    printf '配置: %s\n' "$CONFIG_PATH"
+    if [[ -s "$CONFIG_PATH" ]]; then
+        jq -r '.inbounds[]?.tag // empty' "$CONFIG_PATH" | sed 's/^/协议: /'
+    fi
+}
+
+cli_validate() {
+    validate_candidate "$CONFIG_PATH" || die "配置校验失败"
+    jq -e . "$STATE_PATH" >/dev/null || die "状态文件校验失败"
+    ok "配置和状态校验通过"
+}
+
+cli_backup() {
+    [[ -s "$CONFIG_PATH" ]] || die "配置文件不存在"
+    backup_config
+}
+
+cli_export() {
+    show_links
+}
+
+doctor() {
+    local missing=() command
+    for command in bash curl jq openssl flock ss awk grep sed base64 tar sha256sum install find; do
+        command -v "$command" >/dev/null 2>&1 || missing+=("$command")
+    done
+    if ((${#missing[@]})); then
+        warn "缺少依赖：${missing[*]}"
+        return 1
+    fi
+    ok "基础依赖完整"
+    cli_validate
+}
+
 usage() {
     cat <<EOF
 $APP_NAME $APP_VERSION
@@ -1294,6 +1336,11 @@ $APP_NAME $APP_VERSION
   sb                     打开管理面板
   sb --apply-firewall    恢复 OU-SB 的 HY2 跳跃规则
   sb --clear-firewall    清理 OU-SB 的 HY2 跳跃规则
+  sb --status            查看系统、服务和协议状态
+  sb --validate          校验配置和状态文件
+  sb --backup            创建配置备份
+  sb --export             输出客户端连接信息
+  sb --doctor             检查依赖和配置
   sb --version           显示版本
 EOF
 }
@@ -1310,6 +1357,11 @@ main() {
     case "${1:-}" in
         --apply-firewall) apply_hy2_firewall; exit $? ;;
         --clear-firewall) clear_hy2_firewall; exit $? ;;
+        --status) cli_status; exit $? ;;
+        --validate) cli_validate; exit $? ;;
+        --backup) cli_backup; exit $? ;;
+        --export) cli_export; exit $? ;;
+        --doctor) doctor; exit $? ;;
         --version) printf '%s %s\n' "$APP_NAME" "$APP_VERSION"; exit 0 ;;
         --help|-h) usage; exit 0 ;;
         "") ;;
