@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="2.2.1"
+APP_VERSION="2.2.2"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -135,6 +135,7 @@ init_state() {
         author: $author,
         public_host: "",
         node_name: "",
+        protocol_names: {},
         config_adopted: false,
         hy2: {hop_ports: "", listen_port: 0, firewall_backend: ""},
         reality: {vless: {}, anytls: {}},
@@ -545,6 +546,21 @@ generate_reality_material() {
     printf '%s\t%s\t%s\n' "$private" "$public" "$sid"
 }
 
+prompt_protocol_name() {
+    local tag=$1 protocol=$2 current name flag
+    flag=$(get_public_flag)
+    current="$flag $protocol"
+    read -r -p "请输入节点自定义名称（默认前缀：国旗 + 空格 + 协议名称）[$current]: " name
+    name=${name:-$current}
+    state_set_string "protocol_names.$tag" "$name"
+}
+
+protocol_label() {
+    local tag=$1 fallback=$2 name
+    name=$(jq -r --arg tag "$tag" '.protocol_names[$tag] // empty' "$STATE_PATH" 2>/dev/null || true)
+    [[ -n $name ]] && printf '%s' "$name" || printf '%s' "$(link_prefix) $fallback"
+}
+
 add_ss() {
     protocol_exists "$TAG_SS" && { warn "SS2022 已安装"; return 0; }
     local port password inbound
@@ -554,7 +570,8 @@ add_ss() {
         type:"shadowsocks", tag:$tag, listen:"::", listen_port:$port,
         method:"2022-blake3-aes-128-gcm", password:$password
     }')
-    apply_inbound_json "$TAG_SS" "$inbound"
+    apply_inbound_json "$TAG_SS" "$inbound" || return
+    prompt_protocol_name "$TAG_SS" "SS2022"
 }
 
 add_hy2() {
@@ -571,6 +588,7 @@ add_hy2() {
         tls:{enabled:true, alpn:["h3"], certificate_path:$cert, key_path:$key}
     }')
     apply_inbound_json "$TAG_HY2" "$inbound" || return
+    prompt_protocol_name "$TAG_HY2" "Hysteria2"
     state_set_number 'hy2.listen_port' "$port"
     state_set_string 'hy2.hop_ports' "$hop"
     if [[ -n $hop ]]; then
@@ -591,7 +609,8 @@ add_tuic() {
         users:[{name:"ou-sb", uuid:$uuid, password:$password}], congestion_control:"bbr",
         tls:{enabled:true, alpn:["h3"], certificate_path:$cert, key_path:$key}
     }')
-    apply_inbound_json "$TAG_TUIC" "$inbound"
+    apply_inbound_json "$TAG_TUIC" "$inbound" || return
+    prompt_protocol_name "$TAG_TUIC" "TUIC"
 }
 
 add_trojan() {
@@ -606,7 +625,8 @@ add_trojan() {
         users:[{name:"ou-sb", password:$password}],
         tls:{enabled:true, certificate_path:$cert, key_path:$key}
     }')
-    apply_inbound_json "$TAG_TROJAN" "$inbound"
+    apply_inbound_json "$TAG_TROJAN" "$inbound" || return
+    prompt_protocol_name "$TAG_TROJAN" "Trojan"
 }
 
 add_vless() {
@@ -625,6 +645,7 @@ add_vless() {
             handshake:{server:$sni, server_port:443}, private_key:$private, short_id:[$sid]}}
     }')
     apply_inbound_json "$TAG_VLESS" "$inbound" || return
+    prompt_protocol_name "$TAG_VLESS" "VLESS"
     state_set_string 'reality.vless.public_key' "$public"
     state_set_string 'reality.vless.short_id' "$sid"
     state_set_string 'reality.vless.sni' "$sni"
@@ -646,6 +667,7 @@ add_anytls() {
             handshake:{server:$sni, server_port:443}, private_key:$private, short_id:[$sid]}}
     }')
     apply_inbound_json "$TAG_ANYTLS" "$inbound" || return
+    prompt_protocol_name "$TAG_ANYTLS" "AnyTLS"
     state_set_string 'reality.anytls.public_key' "$public"
     state_set_string 'reality.anytls.short_id' "$sid"
     state_set_string 'reality.anytls.sni' "$sni"
@@ -931,6 +953,7 @@ show_links() {
     printf '\n%s节点配置%s\n' "$C_BOLD" "$C_RESET"
     printf '%s\n' '────────────────────────────────────────'
     if protocol_exists "$TAG_SS"; then
+        label=$(url_encode "$(protocol_label "$TAG_SS" "SS2022")")
         method=$(jq -r --arg tag "$TAG_SS" '.inbounds[]|select(.tag==$tag)|.method' "$CONFIG_PATH")
         password=$(jq -r --arg tag "$TAG_SS" '.inbounds[]|select(.tag==$tag)|.password' "$CONFIG_PATH")
         port=$(jq -r --arg tag "$TAG_SS" '.inbounds[]|select(.tag==$tag)|.listen_port' "$CONFIG_PATH")
@@ -938,6 +961,7 @@ show_links() {
         printf 'SS2022\nss://%s@%s:%s#%s-SS2022\n\n' "$encoded" "$uri_host" "$port" "$label"
     fi
     if protocol_exists "$TAG_HY2"; then
+        label=$(url_encode "$(protocol_label "$TAG_HY2" "Hysteria2")")
         password=$(jq -r --arg tag "$TAG_HY2" '.inbounds[]|select(.tag==$tag)|.users[0].password' "$CONFIG_PATH")
         port=$(jq -r --arg tag "$TAG_HY2" '.inbounds[]|select(.tag==$tag)|.listen_port' "$CONFIG_PATH")
         hop=$(state_get '.hy2.hop_ports')
@@ -951,6 +975,7 @@ show_links() {
         printf '\n'
     fi
     if protocol_exists "$TAG_TUIC"; then
+        label=$(url_encode "$(protocol_label "$TAG_TUIC" "TUIC")")
         uuid=$(jq -r --arg tag "$TAG_TUIC" '.inbounds[]|select(.tag==$tag)|.users[0].uuid' "$CONFIG_PATH")
         password=$(jq -r --arg tag "$TAG_TUIC" '.inbounds[]|select(.tag==$tag)|.users[0].password' "$CONFIG_PATH")
         port=$(jq -r --arg tag "$TAG_TUIC" '.inbounds[]|select(.tag==$tag)|.listen_port' "$CONFIG_PATH")
@@ -958,6 +983,7 @@ show_links() {
     fi
     for tag in "$TAG_VLESS" "$TAG_ANYTLS"; do
         protocol_exists "$tag" || continue
+        if [[ $tag == "$TAG_VLESS" ]]; then label=$(url_encode "$(protocol_label "$TAG_VLESS" "VLESS")"); else label=$(url_encode "$(protocol_label "$TAG_ANYTLS" "AnyTLS")"); fi
         port=$(jq -r --arg tag "$tag" '.inbounds[]|select(.tag==$tag)|.listen_port' "$CONFIG_PATH")
         sni=$(jq -r --arg tag "$tag" '.inbounds[]|select(.tag==$tag)|.tls.server_name' "$CONFIG_PATH")
         sid=$(jq -r --arg tag "$tag" '.inbounds[]|select(.tag==$tag)|.tls.reality.short_id[0]' "$CONFIG_PATH")
@@ -972,11 +998,13 @@ show_links() {
         fi
     done
     if protocol_exists "$TAG_TROJAN"; then
+        label=$(url_encode "$(protocol_label "$TAG_TROJAN" "Trojan")")
         port=$(jq -r --arg tag "$TAG_TROJAN" '.inbounds[]|select(.tag==$tag)|.listen_port' "$CONFIG_PATH")
         password=$(jq -r --arg tag "$TAG_TROJAN" '.inbounds[]|select(.tag==$tag)|.users[0].password' "$CONFIG_PATH")
         printf 'Trojan TLS\ntrojan://%s@%s:%s?security=tls&sni=%s#%s-Trojan\n\n' "$(url_encode "$password")" "$uri_host" "$port" "$host" "$label"
     fi
     if protocol_exists "$TAG_SNELL"; then
+        label=$(url_encode "$(protocol_label "$TAG_SNELL" "Snell")")
         port=$(jq -r --arg tag "$TAG_SNELL" '.inbounds[]|select(.tag==$tag)|.listen_port' "$CONFIG_PATH")
         password=$(jq -r --arg tag "$TAG_SNELL" '.inbounds[]|select(.tag==$tag)|.psk' "$CONFIG_PATH")
         version=$(state_get '.snell.client_version')
@@ -1272,9 +1300,10 @@ update_sing_box() {
 }
 
 uninstall_ou_sb() {
-    local answer candidate count
+    local answer candidate count remove_sb sb_binary
     read -r -p "确认卸载 OU-SB 并删除其协议？[y/N]: " answer
     [[ $answer =~ ^[Yy]$ ]] || return 0
+    read -r -p "是否同时删除 sing-box 程序、服务和配置残留？[y/N]: " remove_sb
     clear_hy2_firewall || true
     candidate=$(mktemp "$SB_DIR/.config.XXXXXX")
     jq '.inbounds = [.inbounds[] | select((.tag // "") | startswith("ou-sb-") | not)]' "$CONFIG_PATH" > "$candidate"
@@ -1294,7 +1323,15 @@ uninstall_ou_sb() {
     fi
     rm -f "$COMMAND_PATH"
     rm -rf "$APP_DIR" "$INSTALL_DIR"
-    ok "OU-SB 已卸载；sing-box 程序本体未删除"
+    if [[ $remove_sb =~ ^[Yy]$ ]]; then
+        sb_binary=$(command -v sing-box 2>/dev/null || true)
+        [[ -n $sb_binary && $sb_binary == /usr/local/bin/sing-box ]] && rm -f -- "$sb_binary"
+        rm -f -- /usr/local/bin/sing-box
+        rm -rf -- "$SB_DIR"
+        ok "OU-SB 与 sing-box 程序、服务和残留已删除"
+    else
+        ok "OU-SB 已卸载；sing-box 程序本体已保留"
+    fi
     exit 0
 }
 
@@ -1304,6 +1341,64 @@ pause_screen() {
     fi
 }
 
+memory_recommendation() {
+    local mb
+    mb=$(awk '/MemTotal:/ {print int($2/1024); exit}' /proc/meminfo 2>/dev/null || echo 1024)
+    if ((mb < 512)); then printf '4194304 4194304'; elif ((mb < 1024)); then printf '8388608 8388608'; elif ((mb < 2048)); then printf '16777216 16777216'; else printf '33554432 33554432'; fi
+}
+
+bbr_status() {
+    printf '拥塞控制：%s\\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+    printf '队列调度：%s\\n' "$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)"
+}
+
+enable_bbr_fq() {
+    command -v sysctl >/dev/null 2>&1 || { warn "未找到 sysctl"; return 1; }
+    modprobe tcp_bbr >/dev/null 2>&1 || true
+    sysctl -w net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr >/dev/null || { warn "BBR 开启失败"; return 1; }
+    mkdir -p /etc/sysctl.d
+    cat > /etc/sysctl.d/99-ou-sb-network.conf <<'EOF'
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+    ok "BBR + FQ 已开启"
+}
+
+tcp_tuning() {
+    local rec_r rec_w input_r input_w
+    read -r rec_r rec_w <<< "$(memory_recommendation)"
+    printf '推荐缓冲区：rmem/wmem %s bytes（按内存自动计算）\\n' "$rec_r"
+    read -r -p "接收缓冲区 [$rec_r]（可输入自定义字节数）: " input_r
+    read -r -p "发送缓冲区 [$rec_w]（可输入自定义字节数）: " input_w
+    input_r=${input_r:-$rec_r}; input_w=${input_w:-$rec_w}
+    [[ $input_r =~ ^[0-9]+$ && $input_w =~ ^[0-9]+$ ]] || { warn "缓冲区必须是数字"; return 1; }
+    sysctl -w net.core.rmem_max="$input_r" net.core.wmem_max="$input_w" net.ipv4.tcp_rmem="4096 87380 $input_r" net.ipv4.tcp_wmem="4096 65536 $input_w" >/dev/null
+    mkdir -p /etc/sysctl.d
+    cat >> /etc/sysctl.d/99-ou-sb-network.conf <<EOF
+net.core.rmem_max=$input_r
+net.core.wmem_max=$input_w
+net.ipv4.tcp_rmem=4096 87380 $input_r
+net.ipv4.tcp_wmem=4096 65536 $input_w
+EOF
+    ok "TCP 缓冲区调优已应用"
+}
+
+network_tuning_menu() {
+    local choice
+    bbr_status
+    cat <<'EOF'
+1) 开启 BBR + FQ
+2) 关闭 BBR（恢复 cubic）
+3) TCP 缓冲区调优
+0) 返回
+EOF
+    read -r -p "选择: " choice
+    case "$choice" in
+        1) enable_bbr_fq ;; 2) sysctl -w net.ipv4.tcp_congestion_control=cubic >/dev/null && ok "已切换为 cubic" ;;
+        3) tcp_tuning ;; 0) return 0 ;; *) warn "无效选项" ;;
+    esac
+}
+
 main_menu() {
     local choice
     while true; do
@@ -1311,51 +1406,33 @@ main_menu() {
         show_protocol_status
         cat <<'EOF'
 
-  1) 查看节点配置      10) 服务状态
-  2) 添加协议          11) 查看日志
-  3) 删除协议          11) 查看日志
-  4) 修改协议端口      12) 校验配置
-  5) HY2 端口跳跃      13) 手动备份
-  6) 节点信息          14) 恢复最近备份
-  7) 启动服务          15) 更新 sing-box
-  8) 停止服务          16) 更新 OU-SB
-  9) 重启服务          17) 卸载 OU-SB
+  1) 查看节点配置
+  2) 添加协议
+  3) 删除协议
+  4) 修改协议端口
+  5) HY2 端口跳跃
+  6) 节点信息
+  7) 启动服务
+  8) 停止服务
+  9) 重启服务
+  10) BBR+FQ 与 TCP 调优
+  11) 更新 sing-box
+  12) 更新 OU-SB
+  13) 卸载 OU-SB
   0) 退出
 EOF
         printf '\n'
         read -r -p "请选择: " choice
         case "$choice" in
-            1) show_links; pause_screen ;;
-            2) add_protocol_menu; pause_screen ;;
-            3) remove_protocol_menu; pause_screen ;;
-            4) change_protocol_port; pause_screen ;;
-            5) configure_hy2_hopping; pause_screen ;;
-            6) configure_identity; pause_screen ;;
-            7)
-                if service_start; then ok "服务已启动"; else warn "服务启动失败"; fi
-                pause_screen
-                ;;
-            8)
-                if service_stop; then ok "服务已停止"; else warn "服务停止失败"; fi
-                pause_screen
-                ;;
-            9)
-                if service_restart; then ok "服务已重启"; else warn "服务重启失败"; fi
-                pause_screen
-                ;;
-            10) service_status || true; pause_screen ;;
-            11) show_logs; pause_screen ;;
-            12)
-                if validate_candidate "$CONFIG_PATH"; then ok "配置校验通过"; else warn "配置校验失败"; fi
-                pause_screen
-                ;;
-            13) create_manual_backup; pause_screen ;;
-            14) restore_backup; pause_screen ;;
-            15) update_sing_box; pause_screen ;;
-            16) update_ou_sb; pause_screen ;;
-            17) uninstall_ou_sb ;;
-            0) exit 0 ;;
-            *) warn "无效选项"; sleep 1 ;;
+            1) show_links; pause_screen ;; 2) add_protocol_menu; pause_screen ;;
+            3) remove_protocol_menu; pause_screen ;; 4) change_protocol_port; pause_screen ;;
+            5) configure_hy2_hopping; pause_screen ;; 6) configure_identity; pause_screen ;;
+            7) if service_start; then ok "服务已启动"; else warn "服务启动失败"; fi; pause_screen ;;
+            8) if service_stop; then ok "服务已停止"; else warn "服务停止失败"; fi; pause_screen ;;
+            9) if service_restart; then ok "服务已重启"; else warn "服务重启失败"; fi; pause_screen ;;
+            10) network_tuning_menu; pause_screen ;; 11) update_sing_box; pause_screen ;;
+            12) update_ou_sb; pause_screen ;; 13) uninstall_ou_sb ;; 0) exit 0 ;;
+            *) warn "⚠️ 无效选项"; sleep 1 ;;
         esac
     done
 }
