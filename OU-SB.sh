@@ -32,6 +32,7 @@ TAG_TROJAN="ou-sb-trojan"
 OS_FAMILY="unknown"
 INIT_SYSTEM="unknown"
 init_colors() {
+    C_RESET="" C_BOLD="" C_CYAN="" C_BLUE="" C_GREEN="" C_YELLOW="" C_RED="" C_MUTED="" C_MAGENTA=""
     if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
         C_RESET=$'\033[0m'
         C_BOLD=$'\033[1m'
@@ -41,6 +42,7 @@ init_colors() {
         C_YELLOW=$'\033[38;5;214m'
         C_RED=$'\033[38;5;196m'
         C_MUTED=$'\033[38;5;245m'
+        C_MAGENTA=$'\033[38;5;213m'
     else
         C_RESET="" C_BOLD="" C_CYAN="" C_BLUE="" C_GREEN=""
         C_YELLOW="" C_RED="" C_MUTED="" C_MAGENTA=""
