@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="OU-SB"
-APP_VERSION="2.2.0"
+APP_VERSION="2.2.1"
 AUTHOR="nodeseek @cshaizhihao"
 RAW_SCRIPT_URL="https://raw.githubusercontent.com/cshaizhihao/OU-SB/main/OU-SB.sh"
 
@@ -43,7 +43,7 @@ init_colors() {
         C_MUTED=$'\033[38;5;245m'
     else
         C_RESET="" C_BOLD="" C_CYAN="" C_BLUE="" C_GREEN=""
-        C_YELLOW="" C_RED="" C_MUTED=""
+        C_YELLOW="" C_RED="" C_MUTED="" C_MAGENTA=""
     fi
 }
 
@@ -132,7 +132,7 @@ init_state() {
         owner: "OU-SB",
         author: $author,
         public_host: "",
-        node_name: "OU-SB",
+        node_name: "",
         config_adopted: false,
         hy2: {hop_ports: "", listen_port: 0, firewall_backend: ""},
         reality: {vless: {}, anytls: {}},
@@ -493,6 +493,34 @@ get_public_host() {
     printf '%s\n' "$host"
 }
 
+country_flag() {
+    case "${1^^}" in
+        US) printf '🇺🇸' ;; SG) printf '🇸🇬' ;; JP) printf '🇯🇵' ;; HK) printf '🇭🇰' ;;
+        TW) printf '🇹🇼' ;; KR) printf '🇰🇷' ;; CN) printf '🇨🇳' ;; GB) printf '🇬🇧' ;;
+        DE) printf '🇩🇪' ;; FR) printf '🇫🇷' ;; NL) printf '🇳🇱' ;; RU) printf '🇷🇺' ;;
+        CA) printf '🇨🇦' ;; AU) printf '🇦🇺' ;; IN) printf '🇮🇳' ;; *) printf '🌐' ;;
+    esac
+}
+
+get_public_flag() {
+    local host code
+    host=$(get_public_host)
+    [[ $host != YOUR_SERVER_IP ]] || { printf '🌐'; return 0; }
+    code=$(curl -4 -fsS --max-time 5 "https://ipapi.co/$host/country_code/" 2>/dev/null || true)
+    country_flag "$code"
+}
+
+link_prefix() {
+    local custom flag
+    custom=$(state_get '.node_name')
+    if [[ -n $custom && $custom != OU-SB ]]; then
+        printf '%s' "$custom"
+    else
+        flag=$(get_public_flag)
+        printf '%s' "$flag"
+    fi
+}
+
 host_for_uri() {
     local host=$1
     if [[ $host == *:* && $host != \[*\] ]]; then
@@ -711,15 +739,16 @@ add_protocol_menu() {
 EOF
         read -r -p "选择: " choice
         case "$choice" in
-            1) add_ss; break ;;
-            2) add_hy2; break ;;
-            3) add_tuic; break ;;
-            4) add_vless; break ;;
-            5) add_anytls; break ;;
-            6) add_trojan; break ;;
-            7) add_snell; break ;;
             0) return 0 ;;
-            *) warn "无效选项"; sleep 1 ;;
+            1|2|3|4|5|6|7)
+                read -r -p "确认添加该协议？[Y/n，输入 n 返回]: " confirm
+                [[ $confirm =~ ^[Nn]$ ]] && continue
+                case "$choice" in
+                    1) add_ss ;; 2) add_hy2 ;; 3) add_tuic ;; 4) add_vless ;;
+                    5) add_anytls ;; 6) add_trojan ;; 7) add_snell ;;
+                esac
+                break ;;
+            *) warn "⚠️ 无效选项"; sleep 1 ;;
         esac
     done
 }
@@ -896,7 +925,7 @@ show_links() {
     local host uri_host label tag port password method uuid sni public sid encoded hop version obfs
     host=$(get_public_host)
     uri_host=$(host_for_uri "$host")
-    label=$(url_encode "$(state_get '.node_name')")
+    label=$(url_encode "$(link_prefix)")
     printf '\n%s节点配置%s\n' "$C_BOLD" "$C_RESET"
     printf '%s\n' '────────────────────────────────────────'
     if protocol_exists "$TAG_SS"; then
@@ -972,6 +1001,18 @@ $TAG_ANYTLS|AnyTLS Reality
 $TAG_TROJAN|Trojan TLS
 $TAG_SNELL|Snell v4/v5/v6
 EOF
+}
+
+configure_identity_ip() {
+    local host current
+    current=$(state_get '.public_host')
+    read -r -p "连接 IP 或 DDNS [自动检测]: " host
+    host=${host#[}; host=${host%]}
+    if [[ -n $host ]]; then
+        valid_endpoint_host "$host" || { warn "连接地址格式无效"; return 1; }
+        state_set_string 'public_host' "$host"
+    fi
+    info "已检测连接地址：$(get_public_host) $(get_public_flag)"
 }
 
 configure_identity() {
@@ -1326,7 +1367,12 @@ first_run() {
     fi
     install_self
     setup_services
-    configure_identity
+    printf '%s%s首次运行协议%s
+' "$C_MAGENTA" "$C_BOLD" "$C_RESET"
+    printf '该脚本会修改 sing-box 配置、服务和防火墙规则。继续请准确输入大写 YES：'
+    read -r answer
+    [[ $answer == YES ]] || die "未确认协议，已退出"
+    configure_identity_ip
     read -r -p "现在添加第一个协议？[Y/n]: " answer
     [[ ! $answer =~ ^[Nn]$ ]] && add_protocol_menu
     apply_hy2_firewall || true
