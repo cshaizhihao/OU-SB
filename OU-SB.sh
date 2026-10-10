@@ -795,7 +795,8 @@ remove_protocol_menu() {
 3) TUIC
 4) VLESS Reality
 5) AnyTLS Reality
-6) Snell
+6) Trojan TLS
+7) Snell
 0) 返回
 EOF
     local choice tag name
@@ -826,7 +827,8 @@ change_protocol_port() {
 3) TUIC
 4) VLESS Reality
 5) AnyTLS Reality
-6) Snell
+6) Trojan TLS
+7) Snell
 0) 返回
 EOF
     read -r -p "选择协议: " choice

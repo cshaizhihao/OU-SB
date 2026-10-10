@@ -137,5 +137,8 @@ trojan_links=$(show_links)
 assert_true "Trojan link is exported" grep -q '^trojan://' <<< "$trojan_links"
 assert_true "Trojan tag is managed" protocol_exists "$TAG_TROJAN"
 
+assert_true "remove menu contains Trojan and Snell" grep -q '6) Trojan TLS' "$PROJECT_DIR/OU-SB.sh"
+assert_true "remove menu keeps Snell at option 7" grep -q '7) Snell' "$PROJECT_DIR/OU-SB.sh"
+
 printf '\n%d passed, %d failed\n' "$passes" "$failures"
 ((failures == 0))
